@@ -1,0 +1,210 @@
+\documentclass{article}
+
+% Language setting
+% Replace `english' with e.g. `spanish' to change the document language
+\usepackage[english]{babel}
+
+% Set page size and margins
+% Replace `letterpaper' with`a4paper' for UK/EU standard size
+\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+
+% Useful packages
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{algorithm2e}
+\usepackage{caption}
+\usepackage{url}
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\bibliographystyle{apa}
+\usepackage[backend=biber,style=numeric,sorting=ynt]{biblatex}
+\addbibresource{sample.bib}
+
+\title{Bayesian clustering}
+\author{Estev\~ao}
+
+\begin{document}
+\maketitle
+
+\section{Finite Mixture of Normals}
+Suppose we have a set of samples $X_{1}, X_{2}, ..., X_{n}$ can be modelled as
+\begin{align}
+    p(X_{i}, | \mu_{1:k}, \tau_{1:k}, q_{1:k}) = \sum_{j}^{k} q_{j} \mbox{N}(\mu_{j}, \tau_{j}^{-1}),
+\end{align}
+where \mbox{N}(.) denotes the Normal distribution and $q_{j}$ represents the weight of the j-th component, with $q_{j} > 0$ and $\sum_{j=1}^{k} q_{j} = 1$. In addition, let's introduce the latent variable $Z_{1:n}$ to induce the mixture. Thus, we have that $X_{i}|Z_{i} = j \sim \mbox{N}(\mu_{j}, \tau_{j})$. Given the introduction of the latent variable, we can rewrite the likelihood function as
+\begin{align}
+    p(X_{1:n}| Z_{1:n}, \mu_{1:k}, \tau_{1:k}, Z_{1:n}) = \prod_{j=1}^{k} \prod_{i: I_{(Z_{i} = j)}}^{n} \mbox{N}(\mu_{j}, \tau_{j}),
+\end{align}
+where $I_{(Z_{i} = j)} = 1$ if $Z_{i} = j$ and $I_{(Z_{i} = j)} = 0$ otherwise. In addition, the latent variables $Z_{1:n} \sim \mbox{Categorical}(1,q)$. That is,
+\begin{align}
+    p(Z_{1:n}|q_{1:k}) = \prod_{i=1} \prod_{j=1}^{k} q_{j}^{I_{(Z_{i} = j)}} = \prod_{j=1}^{k} q_{j}^{n_{j}}, 
+\end{align}
+where $n_{j} = \sum_{i}^{n} I_{(Z_{i} = j)}$ represents the number of observations falling into component $j$. With that, we can define the joint distribution of $X_{1:n}$ and $Z_{1:n}$ as
+\begin{align}
+    p(X_{1:n}, Z_{1:n}| \mu_{1:k}, \tau_{1:k}, q_{1:k}) & = p(X_{1:n}| Z_{1:n}, \mu_{1:k}, \tau_{1:k}) p(Z_{1:n}| q_{1:k}), \\
+    & = \prod_{j=1}^{k} \left[ \prod_{i: I_{(Z_{i} = j)}}^{n} \mbox{N}(\mu_{j}, \tau_{j}) \right] q_{j}^{n_{j}}.
+\end{align}
+For notational convenience, let's denote $\theta_{k} = \{\mu_{1:k}, \tau_{1:k}, q_{1:k}\}$ and $\omega_{ij} = p(Z_{i} = j| \theta_{k}, X_{1:n})/ \sum_{j} p(Z_{i} = j| \theta_{k}, X_{1:n})$. Given the expressions above, we have that $Z_{1:n}$ conditioned on $X_{1:n}$ are independent with probability of classification given by
+\begin{align}
+    p(Z_{i} = j| \theta_{k}, X_{1:n}) & \propto p(X_{i}| Z_{i}, \mu_{j}, \tau_{j}, Z_{i}) p(Z_{i}),\\
+    & \propto \mbox{N}(\mu_{j}, \tau_{j})  q_{j}.
+\end{align}
+In the end, we'll have that
+\begin{align}
+p(Z_{i}| \theta_{k}, X_{1:n}) \sim \mbox{Categorical}(1, \omega_{ij}).
+\end{align}
+To estimate the components of the finite mixture of Normals under the Bayesian paradigm, we consider the following priors:
+\begin{align}
+    \mu_{j}| \tau & \sim \mbox{N}(m_{j},v_{j}/\tau_{j}),\\
+    \tau_{j} & \sim \mbox{G}(a_{j}, b_{j}),\\
+    q_{1:k} & \sim \mbox{Dirichlet}(r_{1}, r_{2}, ..., r_{k}).
+\end{align}
+To construct the MCMC structure, we need the full conditionals for $\mu_{j}$, $\tau_{j}$ and $q_{j}$, which are given below.
+\begin{align}
+    p(\mu_{j}| - ) & \propto p(X_{1:n}| \theta_{k}, Z_{1:n}) p(\mu_{j}), \nonumber
+\end{align}
+\begin{align}
+    \mu_{j}| - \sim \mbox{N}(M_{j}, V_{j}),
+\end{align}
+where $$M_{j} = (n_{j} + 1/v_{j})^{-1} \left(\sum_{i:Z_{i}=j}x_{i}   + m_{j}/v_{j}\right)$$
+and 
+$$V_{j} = \frac{v_{j}}{(n_{j}v_{j} + 1) \tau_{j}}.$$
+
+\begin{align}
+    \tau| - \sim \mbox{G}(A_{j}, B_{j}),
+\end{align}
+where
+$$ A_{j} = \frac{n_{j}}{2} + a_{j},$$
+$$ B_{j} = b_{j} + \frac{m_{j}^{2}}{2v_{j}} + \frac{\sum_{i:Z_{i}=j} X_{i}^{2}}{2} - \frac{1}{2} \left( n_{j} + 1/v_{j}\right) M^{2}_{j}.$$
+
+\begin{align}
+    p(q_{1:k}| -) & \propto p(Z_{1:n}|q_{1:k}) p(q_{1:k}), \nonumber \\
+    & \propto \prod_{j=1}^{k} q_{j}^{n_{j}} p(q_{1:k}), \nonumber \\
+    & \propto \mbox{Multinomial}(n, q_{1:k}) \times \mbox{Dirichlet}(r_{1:k}). \nonumber
+\end{align} 
+\begin{align}
+    q_{1:k}| - \sim \mbox{Dirichlet}(r_{1:k} + n_{1:k})
+\end{align}
+where $n = \sum_{j} n_{j}$.
+
+\section{Product Partition Models}
+Let $\textbf{y} = (y_{1}, ..., y_{n})$ be an $n$-dimensional vector of a variable we have interest in clustering. We define a partition $\rho$ as a collection of clusters $S_{j}$, which are assumed to be non-empty and mutually exclusive. Following \textcite{quintanaetal2018}, the parametric PPM is presented as 
+\begin{align}
+    p(\textbf{y}, \boldsymbol\theta, \rho) & = p(\textbf{y}| \boldsymbol\theta, \rho) p(\boldsymbol\theta) p(\rho), \nonumber \\
+    & = \frac{1}{T} \prod_{j = 1}^{k_{n}} \left[ \left( \prod_{i \in S_{j}} p(y_{i} | \boldsymbol\theta_{j}) \right) p(\boldsymbol\theta_{j}) c(S_{j})\right], \nonumber
+\end{align}
+where $c(S_{j}) =  M \times (|S| - 1)!$ for some $M > 0$ is the cohesion function, $T = \sum_{\rho \in \mathcal{P}_{n}} \prod_{j=1}^{k_{n}(\rho)} c(S_{j})$, and $\boldsymbol\theta = (\theta_{1}, ..., \theta_{n})$ such that $\theta_{i} = \{\theta_{j}: i \in S_{j} \}$. For more detail, see Section 2 in \textcite{quintanaetal2018}.
+
+\subsection{Example}
+Following Section 5 (2nd paragraph) in \textcite{quintanaetal2018}, let's consider that 
+\begin{align}
+ y_{i}| \mu_{j}, \sigma^{2}_{j} & \sim \mbox{N}(\mu_{j}, \sigma^{2}_{j}), \nonumber \\
+\mu_{j}|\mu_{0}, \sigma^{2}_{0} & \sim \mbox{N}(\mu_{0}, \sigma^{2}_{0}), \nonumber\\
+\sigma^{2}_{j} & \sim \mbox{U}(0,1), \nonumber \\
+\sigma^{2}_{0} & \sim \mbox{U}(0,2), \nonumber\\
+\mu_{0} & \sim \mbox{N}(0,100). \nonumber
+\end{align}
+Further, let's denote $n_{j} = |S_{j}|$ and $k$ as the number of distinct clusters. Below, we present the full conditionals of the quantities/parameters of interest.
+
+\begin{align}
+    p(\mu_{j}| - ) & \propto p(\textbf{y}| \mu_{j}, \sigma^{2}_{j}) p(\mu_{j}), \nonumber \\
+    & \propto  \prod_{i \in S_{j}} \left[ \mbox{N}(y_{i}|\mu_{j}, \sigma^{2}_{j}) \right] p(\mu_{j}), \nonumber \\
+    & \propto \exp \left( - \frac{1}{2\sigma^{2}_{j}} \sum_{i \in S_{j}} (y_{i} - \mu_{j})^{2}  \right) \exp \left( - \frac{1}{2 \sigma^{2}_{0}} (\mu_{j} - \mu_{0})^{2}  \right) , \nonumber \\
+    & \propto \exp \Bigg\{ - \frac{1}{2} \left( \mu^{2} \left[ \frac{n_{j}}{\sigma^{2}_{j}} + \frac{1}{\sigma^{2}_{0}} \right] - 2\mu \left[ \sum_{i \in S_{j}} \frac{y_{i}}{\sigma^{2}_{j}} + \frac{\mu_{0}}{\sigma^{2}_{0}} \right] \right) \Bigg\}, \nonumber
+\end{align}
+which is
+\begin{align}
+    \mu_{j}|- \sim \mbox{N}\left( \frac{\sigma^{-2}_{j} \sum_{i \in S_{j}} y_{i} + \mu_{0}/\sigma^{2}_{0}}{n_{j}/\sigma^{2}_{j} +1/\sigma^{2}_{0}} , \frac{1}{n_{j}/\sigma^{2}_{j} +1/\sigma^{2}_{0}} \right).
+\end{align}
+
+\begin{align}
+    p(\sigma^{2}_{j}| - ) & \propto p(\textbf{y}| \mu_{j}, \sigma^{2}_{j}) p(\sigma^{2}_{j}), \nonumber \\
+    & \propto  \prod_{i \in S_{j}} \left[ \mbox{N}(y_{i}|\mu_{j}, \sigma^{2}_{j}) \right] p(\sigma^{2}_{j}), \nonumber \\
+    & \propto (\sigma^{2}_{j})^{-n_{j}/2} \exp \left( - \frac{1}{2\sigma^{2}_{j}} \sum_{i \in S_{j}} (y_{i} - \mu_{j})^{2}  \right) \times 1 , \nonumber
+\end{align}
+which is
+\begin{align}
+    \sigma^{2}_{j}|- \sim \mbox{IG}\left( \frac{n_{j}}{2}, \frac{\sum_{i \in S_{j}} (y_{i} - \mu_{j})^{2}}{2} \right).
+\end{align}
+
+\begin{align}
+    p(\mu_{0}| - ) & \propto p(\mu_{j}| \mu_{0},\sigma^{2}_{0}) p(\mu_{0}), \nonumber \\
+    & \propto  \prod_{j} \left[ \mbox{N}(\mu_{j}| \mu_{0}, \sigma^{2}_{0}) \right] p(\mu_{0}), \nonumber \\
+    & \propto \exp \left( - \frac{1}{2 \sigma^{2}_{0}} \sum_{j} (\mu_{j} - \mu_{0})^{2}  \right), \nonumber
+\end{align}
+which is
+\begin{align}
+    \mu_{0}|- \sim \mbox{N}\left( \frac{\sum_{j} \mu_{j}}{k}, \frac{\sigma^{2}_{0}}{k} \right).
+\end{align}
+\begin{align}
+    p(\sigma^{2}_{0}| - ) & \propto p(\mu_{j}| \mu_{0}, \sigma^{2}_{0}) p(\sigma^{2}_{0}), \nonumber \\
+    & \propto  \prod_{j} \left[ \mbox{N}(\mu_{j}| \mu_{0}, \sigma^{2}_{0}) \right] p(\sigma^{2}_{0}), \nonumber \\
+    & \propto (\sigma^{2}_{0})^{-k/2} \exp \left( - \frac{1}{2 \sigma^{2}_{0}} \sum_{j} (\mu_{j} - \mu_{0})^{2}  \right), \nonumber
+\end{align}
+\begin{align}
+    \sigma^{2}_{0}|- \sim \mbox{IG}\left( \frac{k}{2}, \frac{\sum_{j} (\mu_{j} - \mu_{0})^{2}}{2} \right).
+\end{align}
+To simulate from the posterior distribution of the PPM, we use the algorithm 8 introduced by \textcite{neal2000markov}. This algorithm was proposed in the context of Dirichlet Process Mixture models, but it can be used for PPMs as well.
+
+\begin{enumerate}
+    \item Let's denote the cluster labels as $c_{i} = \{ j: i \in S_{j}\}$ with values in $\{1, ..., k\}$. For $i = 1, \cdots, n$, let $h = k+m$, where $k$ is the number of distinct cluster labels $c_{j}$ such that $j \ne i$ (i.e., the number of distinct clusters considering that observation $i$ has been removed).
+    
+    \textbf{If $c_{i}$ is a singleton\footnote{A singleton is a cluster with only one observation. In contrast, any cluster with more than one observation is not a singleton.}}, i.e., $c_{i} \ne c_{j}$ for all $j \ne i$, let $c_{i}$ have the label $k + 1$, and draw values independently from the prior distribution for $\mu_{j}$ and $\sigma^{2}_{j}$ for those $\mu_{j}$ and $\sigma^{2}_{j}$ for which $k + 1 < c \leq h$.
+    
+    \textbf{If $c_{i}$ is NOT a singleton}, i.e., $c_{i} = c_{j}$ for some $j \ne i$, draw values independently from the prior distribution for $\mu_{j}$ and $\sigma^{2}_{j}$ for those $\mu_{j}$ and $\sigma^{2}_{j}$ for which $k < c \leq h$.
+    
+    For both cases, draw a new value for $c_{i}$ from $\{1, \cdots, h\}$ using the following probabilities:
+    
+    \begin{equation}
+    p(c_{i} = c | c_{-i}, y_{i}, \{\mu_{c}\}, \{\sigma^{2}_{c}\} ) = 
+    \begin{cases}
+          b_{i} \frac{n_{-i, c}}{n-1+\alpha} p(y_{i}| \mu_{c}, \sigma^{2}_{c}) & \mbox{ for } 1 \leq c \leq k, \\
+          \mbox{} \\
+          b_{i} \frac{\alpha/m}{n-1+\alpha} p(y_{i}| \mu_{c}, \sigma^{2}_{c}) & \mbox{ for } k \leq c \leq h,
+    \end{cases}
+    \end{equation}
+    where $n_{-i, c}$ is the number of observations (excluding $i$) which have $c_{j} = c$, and $\alpha$ is the Dirichlet process concentration parameter. Change the state to contain only those $\mu_{j}$ and $\sigma^{2}_{j}$ that are now associated with one or more observations. Here, $b_{i}$ is an appropriate normalising constant given by
+    \begin{equation}
+        b_{i}^{-1} = \sum_{c = 1}^{k} \frac{n_{-i, c}}{n-1+\alpha} p(y_{i}| \mu_{c}, \sigma^{2}_{c}) + \sum_{c = k}^{h} \frac{\alpha/m}{n-1+\alpha} p(y_{i}| \mu_{c}, \sigma^{2}_{c}).
+    \end{equation}
+    
+    \item For all $c \in \{c_{1}, \cdots, c_{n}\}$: Draw new values from $\mu_{j}| -$, $\sigma^{2}_{j}| - $, $\mu_{0}| -$, and $\sigma^{2}_{0}|-$.
+    
+\end{enumerate}
+
+\RestyleAlgo{boxruled}
+\begin{algorithm}
+\label{original_BART_algorithm}
+\caption{PPM model}
+\SetAlgoLined
+Set up $\textbf{y}$ and assign all observation into a cluster.\\
+Set values for $\alpha$ and $m$. \\
+    \For{mcmc in 1:MCMCiter}{
+        \For{i in 1:n}{
+            If $c_{i}$ is NOT a singleton, call part 1 of Neal's algorithm accordingly. \\
+            If $c_{i}$ is a singleton, call part 1 of Neal's algorithm accordingly. \\
+            If any cluster has been removed, adjust the labels so that there is no gap between them. Recall the labels should follow a sequence from $1$ to $k$.
+        }
+        Update $\mu_{j}| -$.\\
+        Update $\sigma^{2}_{j}| - $.\\
+        Update $\mu_{0}| -$.\\
+        Update $\sigma^{2}_{0}|-$.
+    }
+\end{algorithm}
+
+% Trying to marginalise mu and sigma2 for the full conditional of rho.
+% \begin{align}
+%     p(\rho| \textbf{y}) & \propto \prod_{j = 1}^{k_{n}} \Bigg\{ c(S_{j}) \int \int \prod_{i \in S_{j}} p(y_{i} | \mu_{j}, \sigma^{2}_{j}) p(\mu_{j}) p(\sigma^{2}_{j}) d \mu_{j} d \sigma^{2}_{j} \Bigg\}, \nonumber \\
+%     & \propto \prod_{j = 1}^{k_{n}} \Bigg\{ (|S_{j}| - 1)! \int \int \prod_{i \in S_{j}} N(y_{i} | \mu_{j}, \sigma^{2}_{j}) N(\mu_{j}| \mu_{0}, \sigma^{2}_{0}) U(\sigma^{2}_{j}| 0, 1) d \mu_{j} d \sigma^{2}_{j} \Bigg\}, \nonumber \\
+%     & \propto \prod_{j = 1}^{k_{n}} \Bigg\{ (|S_{j}| - 1)! \Bigg\} \times \nonumber \\
+%     & \mbox{ } \mbox{ } \mbox{ } \times \prod_{j = 1}^{k_{n}} \int \int (\sigma^{j})^{-n_{j}/2} \exp \Bigg\{ - \frac{1}{2\sigma^{2}_{j}} \sum_{i \in S_{j}} (y_{i} - \mu_{j})^{2} \Bigg\} \exp \Bigg\{ - \frac{1}{2\sigma^{2}_{0}} \sum_{i \in S_{j}} (\mu_{j} - \mu_{0})^{2} \Bigg\} d \mu_{j} d \sigma^{2}_{j}, \nonumber \\
+%     & \propto \prod_{j = 1}^{k_{n}} \Bigg\{ (|S_{j}| - 1)! \Bigg\} \times \nonumber \\
+%     & \mbox{ } \mbox{ } \mbox{ } \times \prod_{j = 1}^{k_{n}} \int \int (\sigma^{j})^{-n_{j}/2} \exp \Bigg\{ - \frac{1}{2} \left ( \mu^{2}_{j} \left[ \frac{|S_{j}|}{\sigma^{2}_{j}} + \frac{1}{\sigma^{2}_{0}} \right] - 2\mu_{j} \left[ \frac{\sum_{i \in S_{j}} y_{i}}{\sigma^{2}_{j}} + \frac{\mu_{0}}{\sigma^{2}_{0}} \right] \right) \Bigg\} d \mu_{j} d \sigma^{2}_{j} \nonumber \\
+%     & \propto \prod_{j = 1}^{k_{n}} \Bigg\{ (|S_{j}| - 1)! \Bigg\} \times \nonumber \\
+%     & \mbox{ } \mbox{ } \mbox{ } \times \prod_{j = 1}^{k_{n}} \int (\sigma_{j}^{2})^{-n_{j}/2} \left( n_{j}/\sigma^{2}_{j} +1/\sigma^{2}_{0} \right)^{-1/2} \exp \Bigg\{-\frac{1}{2\sigma^{2}_{j}} \sum_{i \in S_{j}} y_{i}^{2} + \frac{\left(\sigma^{-2}_{j} \sum_{i \in S_{j}} y_{i} + \mu_{0}/\sigma^{2}_{0}\right)^{2}}{n_{j}/\sigma^{2}_{j} +1/\sigma^{2}_{0}} \Bigg\} d \sigma^{2}_{j} \nonumber
+% \end{align}
+
+\newpage
+\printbibliography
+
+\end{document}
