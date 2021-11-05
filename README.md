@@ -3,4 +3,4 @@ In order to have a deeper understanding about some basic Bayesian clustering met
 
 1 - The math is presented in the pdf document.
 
-2 - The R scripts are FMN.R for Finite Mixture of Normals and PPM.R for Product Partition Models.
+2 - The R scripts are ```FMN.R``` for Finite Mixture of Normals and ```PPM.R``` for Product Partition Models.
