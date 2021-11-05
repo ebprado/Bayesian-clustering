@@ -1,8 +1,8 @@
 # Bayesian clustering
 In order to have a deeper understanding about some basic Bayesian clustering methods, such as Finite Mixture of Normals (FMN) and Product Partition Models (PPM), I decided to implement them in their vanilla version in R as simple as simple.
 
-## section{Finite Mixture of Normals}
-Suppose we have a set of samples $X_{1}, X_{2}, ..., X_{n}$ can be modelled as
+## Finite Mixture of Normals
+Suppose we have a set of samples X_{1}, X_{2}, ..., X_{n$ can be modelled as
 \begin{align}
     p(X_{i}, | \mu_{1:k}, \tau_{1:k}, q_{1:k}) = \sum_{j}^{k} q_{j} \mbox{N}(\mu_{j}, \tau_{j}^{-1}),
 \end{align}
